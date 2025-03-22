@@ -79,7 +79,12 @@ def print_stats(df):
     print("99.9th percentile: ", df["difference_ms"].quantile(0.9999))
     print("95th percentile: ", df["difference_ms"].quantile(0.95))
     
-print_stats(df)
+    total_time_seconds = (df['TimeArrival_ns'].iloc[-1] - df['TimeArrival_ns'][0]) / 1e9
+    print("Total time: ", total_time_seconds, " seconds")
+    print("Total messages: ", len(df))
+    print("Messages per second: ", len(df) / total_time_seconds)
+    
+print_stats(df)    
 plot_messages_per_second(df)
 line_chart_differences(df)
 plot_normal_histogram(df)

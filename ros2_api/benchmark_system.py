@@ -4,8 +4,8 @@ import random
 import csv
 from ros2_sdk.ros2_sdk import ROS2SDK, TrajPoint
 
-hz = 400  # Frequency of messages in Hz
-messages_to_send = 240000  # Number of messages to send
+hz = 300  # Frequency of messages in Hz
+messages_to_send = 180000  # Number of messages to send
 sdk = ROS2SDK()
 sdk.connect("UDS", {"path_recv": "/tmp/test_ros2.socket", "path_send": "/tmp/test_sdk.socket"})
 sdk.send_effort([0, 0, 0, 0, 0, 0], "test")
