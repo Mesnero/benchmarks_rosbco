@@ -41,9 +41,6 @@ def plot_messages_per_second(df):
     
 def calculate_time_differences(df):
     df['difference'] = df['TimeArrival_ns'].diff()
-    # Drop the maximum 100 values and minimum with nlargest and nsmallest
-    df = df.drop(df['difference'].nlargest(10).index)
-    df = df.drop(df['difference'].nsmallest(10).index)
     return df
 
 
@@ -59,7 +56,6 @@ df_3["difference_ms"] = df_3["difference"].to_numpy() / 1e6
 
 def line_chart_differences(df):
     df = df.dropna()
-    # do not draw every point, too many
     df = df.iloc[::1000, :]
     plt.figure(figsize=(10, 6))
     plt.plot(df['difference_ms'])
