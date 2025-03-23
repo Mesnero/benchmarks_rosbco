@@ -6,7 +6,7 @@ import argparse
 # Parse command-line arguments
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Visualize benchmark data')
-    parser.add_argument('--run', type=str, default="uds_big_1", 
+    parser.add_argument('--run', type=str, default="uds_big", 
                        help='Run identifier (e.g., "uds_big_1", "rosbridge")')
     return parser.parse_args()
 
@@ -15,35 +15,40 @@ args = parse_arguments()
 run = args.run
 print(f"Processing benchmark data for run: {run}")
 base_path = f'benchmark/data/{run}'
-df = pd.read_csv(f'{base_path}/arrived_messages.csv')
+df = pd.read_csv(f'{base_path}_1/arrived_messages.csv')
+df_2 = pd.read_csv(f'{base_path}_2/arrived_messages.csv')
+df_3 = pd.read_csv(f'{base_path}_3/arrived_messages.csv')
 
-if not run.startswith("rosbridge"):
-    df_ros_serialize = pd.read_csv(f'{base_path}/time_serialize.csv', skipinitialspace=True)
-    df_ros_deserialize = pd.read_csv(f'{base_path}/time_deserialize.csv', skipinitialspace=True)
-    # Merge new timestamps into the main dataframe
-    df["Start Serialize ROS"] = df_ros_serialize["Sent Time"]
-    df["End Serialize ROS"] = df_ros_serialize["Received Time"]
-    df["Start Deserialize ROS"] = df_ros_deserialize["Sent Time"]
-    df["End Deserialize ROS"] = df_ros_deserialize["Received Time"]
-    
-    df_py_serialize = pd.read_csv(f'{base_path}/serialize_time.csv', skipinitialspace=True)
-    df_py_deserialize = pd.read_csv(f'{base_path}/deserialize_time.csv', skipinitialspace=True)
-    
-    df["Start Serialize Py"] = df_py_serialize["Start Time"]
-    df["End Serialize Py"] = df_py_serialize["End Time"]
-    df["Start Deserialize Py"] = df_py_deserialize["Start Time"]
-    df["End Deserialize Py"] = df_py_deserialize["End Time"]
-    
-else: # Just here to not break the code
-    df["Start Serialize ROS"] = df["Sent Time"]
-    df["End Serialize ROS"] = df["Received Time"]
-    df["Start Deserialize ROS"] = df["Sent Time"]
-    df["End Deserialize ROS"] = df["Received Time"]
-    
-    df["Start Serialize Py"] = df["Sent Time"]
-    df["End Serialize Py"] = df["Received Time"]
-    df["Start Deserialize Py"] = df["Sent Time"]
-    df["End Deserialize Py"] = df["Received Time"]
+def compute_timestamps(df, path):
+    if not run.startswith("rosbridge"):
+        df_ros_serialize = pd.read_csv(f'{path}/time_serialize.csv', skipinitialspace=True)
+        df_ros_deserialize = pd.read_csv(f'{path}/time_deserialize.csv', skipinitialspace=True)
+        # Merge new timestamps into the main dataframe
+        df["Start Serialize ROS"] = df_ros_serialize["Sent Time"]
+        df["End Serialize ROS"] = df_ros_serialize["Received Time"]
+        df["Start Deserialize ROS"] = df_ros_deserialize["Sent Time"]
+        df["End Deserialize ROS"] = df_ros_deserialize["Received Time"]
+        
+        df_py_serialize = pd.read_csv(f'{path}/serialize_time.csv', skipinitialspace=True)
+        df_py_deserialize = pd.read_csv(f'{path}/deserialize_time.csv', skipinitialspace=True)
+        
+        df["Start Serialize Py"] = df_py_serialize["Start Time"]
+        df["End Serialize Py"] = df_py_serialize["End Time"]
+        df["Start Deserialize Py"] = df_py_deserialize["Start Time"]
+        df["End Deserialize Py"] = df_py_deserialize["End Time"]
+        
+    else: # Just here to not break the code
+        df["Start Serialize ROS"] = df["Sent Time"]
+        df["End Serialize ROS"] = df["Received Time"]
+        df["Start Deserialize ROS"] = df["Sent Time"]
+        df["End Deserialize ROS"] = df["Received Time"]
+        
+        df["Start Serialize Py"] = df["Sent Time"]
+        df["End Serialize Py"] = df["Received Time"]
+        df["Start Deserialize Py"] = df["Sent Time"]
+        df["End Deserialize Py"] = df["Received Time"]
+    return df    
+
 
 # Compute all delays
 def compute_delays(df):
@@ -61,7 +66,14 @@ def compute_delays(df):
     
     return df
 
+df = compute_timestamps(df, f'{base_path}_1')
+df_2 = compute_timestamps(df_2, f'{base_path}_2')
+df_3 = compute_timestamps(df_3, f'{base_path}_3')
 df = compute_delays(df)
+df_2 = compute_delays(df_2)
+df_3 = compute_delays(df_3)
+
+df = pd.concat([df, df_2, df_3]).reset_index(drop=True)
 
 # Compute statistics
 def compute_statistics_ros2api(df): #.mean(), .median(), .std(), .max(), .quantile(0.95), .quantile(0.99)
@@ -131,7 +143,8 @@ def compute_statistics_rosbridge(df):
         "Standard Deviation Total Transmission Time": df["Total Transmission Time"].std(),
         "Max Total Transmission Time": df["Total Transmission Time"].max(),
         "95th Percentile Total Transmission Time": df["Total Transmission Time"].quantile(0.95),
-        "99th Percentile Total Transmission Time": df["Total Transmission Time"].quantile(0.99)
+        "99th Percentile Total Transmission Time": df["Total Transmission Time"].quantile(0.99),
+        "Max Total Time, with first Message Removed": df["Total Transmission Time"][5:].max()
     }
     
     for key, value in stats.items():
@@ -139,29 +152,47 @@ def compute_statistics_rosbridge(df):
     
 def plot_normal_histogram(df, bins=100):
     plt.figure(figsize=(10, 6))
-    
-    plt.hist(df["Total Transmission Time"], bins=bins, alpha=0.7, edgecolor='black')
+        
+    plt.hist(df["Total Transmission Time"], bins=bins, alpha=0.7, edgecolor='gray')
+    csfont = {'fontname':'Times New Roman', 'fontsize': 14}
 
-    plt.xlabel("Delay (ms)")
-    plt.ylabel("Frequency")
-    plt.title("Histogram of Total Transmission Time")
+    plt.xlabel("Delay (ms)",  **csfont)
+    plt.ylabel("Frequency", **csfont)
+    if run.startswith("rosbridge"):
+        plt.title("Histogram: rosbridge",  **csfont)
+    if run.startswith("uds"):
+        plt.title("Histogram: Unix Domain Socket",  **csfont)
+    if run.startswith("tcp"):
+        plt.title("Histogram: Transmission Control Protocol",  **csfont)
     plt.grid(axis="y", linestyle="--", alpha=0.6)
     plt.show()
 
 # Plot stacked bar chart (Average delay contributions)
 def plot_average_bar_chart(df):
+    csfont = {'fontname':'Times New Roman', 'fontsize': 14}
     categories = [
+        "Transmission Delay", "Serialization Time (Python)", "Send to ROS",
+        "Deserialization Time (ROS)", "ROS Processing Time", "Serialization Time (ROS)",
+        "Send to Python", "Deserialization Time (Python)", "Reception Delay"
+    ]
+    
+    column_names = [
         "Transmission Delay", "Serialization Time Py", "Send to ROS Delay",
         "Deserialization Time ROS", "ROS Processing Time", "Serialization Time ROS",
         "Send to Py Delay", "Deserialization Time Py", "Reception Delay"
-        ]
-    averages = [df[col].mean() for col in categories]
+    ]
+    averages = [df[col].mean() for col in column_names]
 
     plt.figure(figsize=(8, 6))
-    plt.barh(categories, averages, color=["blue", "red", "green", "purple", "orange", "blue", "green", "red", "orange"], alpha=0.7)
+    plt.barh(categories, averages, alpha=0.7)
 
-    plt.xlabel("Average Time (ms)")
-    plt.title("Average Delay Components")
+    plt.xlabel("Average Time (ms)", **csfont)
+    if run.startswith("rosbridge"):
+        plt.title("Average Delay rosbridge", **csfont)
+    if run.startswith("uds"):
+        plt.title("Average Delay Unix Domain Socket", **csfont)
+    if run.startswith("tcp"):
+        plt.title("Average Delay TCP", **csfont)
     plt.grid(axis="x", linestyle="--", alpha=0.6)
     plt.show()
 
@@ -236,7 +267,7 @@ def plot_smoothed_trend(df, column="Total Transmission Time", window_size=1000):
 
 # ---- Run Functions ----
 if not run.startswith("rosbridge"):
-    compute_statistics_ros2api(df) 
+    #compute_statistics_ros2api(df) 
     plot_normal_histogram(df)
     plot_single_stacked_bar(df)     
     plot_average_bar_chart(df)

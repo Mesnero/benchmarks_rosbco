@@ -21,7 +21,10 @@ def parse_arguments():
 args = parse_arguments()
 run = args.run
 base_path = f'benchmark/data/{run}/'
-df_recv = pd.read_csv(f'{base_path}/arrived_messages.csv')
+# Load received messages from two CSV files and combine them
+df_recv_1 = pd.read_csv(f'{base_path}/arrived_messages_1.csv')
+df_recv_2 = pd.read_csv(f'{base_path}/arrived_messages_2.csv')
+df_recv = pd.concat([df_recv_1, df_recv_2]).reset_index(drop=True)
 
 # Load lost messages (IDs, Sent Time)
 df_lost = pd.read_csv(f'{base_path}/invalid_ids_never_arrived.csv')
@@ -58,9 +61,10 @@ def plot_delay_with_lost_messages(df_recv, df_lost, max_points=10000):
 
 def plot_messages_per_second(df_recv, window_size=10, max_hz=10_000):
     plt.figure()
+    csfont = {'fontname':'Times New Roman', 'fontsize': 14}
 
     # Convert timestamps to seconds (assuming they are in nanoseconds)
-    df_recv["Received Time (s)"] = (df_recv["Received Time"].to_numpy() - df_recv["Received Time"][0]) / 1_000_000_000
+    df_recv["Received Time (s)"] = (df_recv["Received Time"].to_numpy()) / 1_000_000_000
     # Bin timestamps into 1-second intervals
     df_recv["Time Bin"] = df_recv["Received Time (s)"].astype(int).to_numpy() * 100
     msg_per_sec = df_recv.groupby("Time Bin").size().to_numpy()
@@ -79,7 +83,7 @@ def plot_messages_per_second(df_recv, window_size=10, max_hz=10_000):
 
     # Plot theoretical function: 100x + 100 (extended to t_max_hz)
     theoretical_time_range = np.arange(len(time_range))
-    theoretical_values = 100 * theoretical_time_range
+    theoretical_values = 100 * theoretical_time_range + 100
 
     # Trim theoretical values to only go up to 10,000 Hz
     theoretical_time_range = theoretical_time_range[theoretical_values <= max_hz]
@@ -87,9 +91,8 @@ def plot_messages_per_second(df_recv, window_size=10, max_hz=10_000):
 
     plt.plot(theoretical_time_range, theoretical_values, linestyle="--", color="red", label="Expected: 100x + 100")
 
-    plt.xlabel("Commanded Hz")
-    plt.ylabel("Messages per Second")
-    plt.title(f"Message Rate Over Time (Smoothed, Window={window_size}s)")
+    plt.xlabel("Seconds", **csfont)
+    plt.ylabel("Messages per Second", **csfont)
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.6)
 
@@ -107,6 +110,7 @@ def plot_messages_per_second(df_recv, window_size=10, max_hz=10_000):
 
 def plot_lost_messages_histogram(df_lost, df_recv, bin_size=500):
     plt.figure()
+    csfont = {'fontname':'Times New Roman', 'fontsize': 14}
 
     df_lost["Sent Time (s)"] = (df_lost["Sent Time"].to_numpy() - df_recv["Sent Time"][0]) / 1_000_000_000
     df_lost["Hz at Send"] = 100 + 100 * df_lost["Sent Time (s)"]
@@ -120,9 +124,8 @@ def plot_lost_messages_histogram(df_lost, df_recv, bin_size=500):
     # Create histogram with correct bins
     plt.hist(df_lost["Hz at Send"], bins=bins, color="red", alpha=0.7)
 
-    plt.xlabel("Message Rate (Hz)")
-    plt.ylabel("Number of Lost Messages")
-    plt.title(f"Lost Messages per {bin_size} Hz Interval")
+    plt.xlabel("Message Rate (Hz)", **csfont)
+    plt.ylabel("Number of Lost Messages", **csfont)
     plt.grid(True, linestyle="--", alpha=0.6)
 
     if args.save:
@@ -142,12 +145,26 @@ def stats_first_lost_message(df_lost, df_recv):
     
     #print it to console
     print(f"First lost message at {first_lost_time:.2f} seconds with {first_lost_hz:.2f} Hz")
+    
+def hardware_resources(df_monitor):
+    # Log the maximum difference between maximum and minimum for both CPU and Memory
+    cpu_usage = df_monitor["CPU Usage"]
+    memory_usage = df_monitor["Memory Usage"] 
+    
+    print(cpu_usage.max())
+    print(memory_usage.max())
+    
+    cpu_diff = cpu_usage.quantile(0.99) - cpu_usage.quantile(0.01)
+    memory_diff = memory_usage.quantile(0.99) - memory_usage.quantile(0.01)
+    
+    print(f"CPU Usage Difference: {cpu_diff:.2f}%")
+    print(f"Memory Usage Difference: {memory_diff:.2f}%") 
 
 # Run the function
+hardware_resources(df_monitor)
+
 plot_lost_messages_histogram(df_lost, df_recv)
 
 plot_messages_per_second(df_recv)
-
-plot_delay_with_lost_messages(df_recv, df_lost)
 
 stats_first_lost_message(df_lost, df_recv)
